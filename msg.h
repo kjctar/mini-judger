@@ -11,10 +11,10 @@ class Msg{
 
 public:
     bool virtual decodec(std::string &buf,int &index){
-
+        return true;
     }
     std::string virtual encodec(){
-
+        return "";
     }
     virtual ~Msg(){
 

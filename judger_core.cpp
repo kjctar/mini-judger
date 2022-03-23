@@ -55,16 +55,22 @@ private:
     int user;
 
 public:
-    int openChroot;
+
     std::string workdir;
     //初始化沙盒，编译运行环境的构建
     Sandbox(std::string  workdir){
-        openChroot=0;
+        this->workdir=workdir;
+
     }
 
     void init(){
+        std::cout<<workdir<<std::endl;
         system(("rm -rf  "+workdir).c_str());
-        system(("mkdir -p  "+workdir+"/{lib/x86_64-linux-gnu/,lib64,bin}").c_str());
+        system(("mkdir -p "+workdir).c_str());
+        system("cp /home/kjctar/Desktop/main.c /home/kjctar/Desktop/rundir/");
+        system(("mkdir -p  "+workdir+"/lib/x86_64-linux-gnu").c_str());
+        system(("mkdir -p  "+workdir+"/lib64").c_str());
+        system(("mkdir -p  "+workdir+"/bin").c_str());
         system(("cp /lib/x86_64-linux-gnu/libtinfo.so.6 "+workdir+"/lib/x86_64-linux-gnu/").c_str());
         system(("cp /lib/x86_64-linux-gnu/libdl.so.2 "+workdir+"/lib/x86_64-linux-gnu/").c_str());
         system(("cp /lib/x86_64-linux-gnu/libc.so.6 "+workdir+"/lib/x86_64-linux-gnu/").c_str());
@@ -72,13 +78,19 @@ public:
         system(("cp /bin/bash "+workdir+"/bin/").c_str());
     }
     //进入沙盒
-    int into(){
+    int into(int openChroot){
         int err=0;
         err+=chdir(workdir.c_str());
+        char dir[40];
+        char *p = getcwd(dir , 40);
+        std:std::cout<<"当前工作目录："<<dir<<std::endl;
         system(("/bin/touch "+workdir+"/user.out").c_str());
+        system(("/bin/touch "+workdir+"/error.out").c_str());
         stdout=freopen("user.out", "w", stdout);
         stderr=freopen("error.out", "a+", stderr);
+
         if(openChroot){
+            std::cout<<"开启 chroot\n";
             err+=chroot(workdir.c_str());
         }
 
@@ -97,25 +109,34 @@ public:
     struct sockaddr_in targetAddr;
 
     Report(std::string SERVER_IP,int SERVER_PORT){
+
         if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-            //perror("socket");//改成日志最好
+            perror("socket");//改成日志最好
            // exit(0);
         }
-
+        memset(&targetAddr, 0, sizeof(targetAddr));
         targetAddr.sin_family = AF_INET;
         targetAddr.sin_port = htons(SERVER_PORT);
-        sockaddr_in serverAddr;
-        serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP.c_str());
-        if(connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0){
-            //perror("connect");
-           // exit(0);
+        if( inet_pton(AF_INET, SERVER_IP.c_str(), &targetAddr.sin_addr) <= 0){
+            //printf("inet_pton error for %s\n",SERVER_IP.c_str());
+            //return 0;
         }
+
+        std::cout<<"connect "<<SERVER_IP<<" "<<SERVER_PORT<<std::endl;
+        if( connect(sock, (struct sockaddr*)&targetAddr, sizeof(targetAddr)) < 0){
+           // printf("connect error: %s(errno: %d)\n",strerror(errno),errno);
+            std::cout<<"链接失败\n";
+            return;
+        }
+
+
+
     }
 
 
     void upStatus(uint8_t new_status){
         status[0]=new_status;
-        std::thread(&Report::feedback,this);
+       // std::thread(&Report::feedback,this);
     }
     void feedback(){
 
@@ -131,7 +152,7 @@ class Judger{
 public:
     Report report;
     language lang;
-    const int STD_MB=1024;
+    const int STD_MB=1048576LL;
     const int BUFFER_SIZE=4096;
     Sandbox box;
     Judger(std::string SERVER_IP,int SERVER_PORT,language lang,std::string workdir):report(SERVER_IP, SERVER_PORT),lang(lang),
@@ -143,6 +164,7 @@ public:
         int pid = fork();//创建子进程
         if (pid == 0)
         {
+
             struct rlimit LIM;
             int cpu = 50;
             LIM.rlim_max = cpu;//s
@@ -157,22 +179,28 @@ public:
 
             LIM.rlim_max = STD_MB << 11 ;
             LIM.rlim_cur = STD_MB << 11;
-
-
             setrlimit(RLIMIT_AS, &LIM);//设置进程的虚拟地址空间大小，这里是 500mb
+            const char *CP_C[] = {"/bin/gcc", "-o", "main", "main.c",  "-lm",  NULL};    // 看起来别扭，但是gcc非要-lm选项在Main.c后面才认
+//            const char *CP_X[] = {"g++", "-fno-asm", cc_opt , fmax_errors , cpp_std ,
+//                                  "-Wall", "-lm", "--static", "-DONLINE_JUDGE", "-o", "Main", "Main.cc", NULL};
 
-            stderr=freopen("ce.txt", "w", stderr);
-            freopen("/dev/null", "w", stdout);
-            execvp("/bin/gcc",(char *const *)"main.c -o main");
+            printf("hhhhhn\n");
 
-            std::cout<<"编译完成！"<<std::endl;
+           // report.upStatus(1);
+            box.into(0);
+            execvp(CP_C[0],(char *const *)CP_C);
+
+            //std::cout<<"编译完成！"<<std::endl;
 
             exit(0);
         }
         else//父进程
         {
             int status = 0;
+            std::cout<<"等待编译完成\n";
             waitpid(pid, &status, 0);//阻塞的等待编译命令执行完
+            std::cout<<"父进程等待结束\n";
+            report.upStatus(11);
             return status;
         }
     }
@@ -221,10 +249,13 @@ public:
             { //
                 ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXIT);
             }
-            curmemory = get_proc_status(pid, "VmPeak:") << 10;
-            if (curmemory > mem_lmt * STD_MB)
+            int temp=get_proc_status(pid, "VmPeak:");
+            curmemory = std::max(temp,curmemory);
+            //std::cout<<curmemory<<std::endl;
+            if ((curmemory<<10) > mem_lmt * STD_MB)
             {
                 report.upStatus(23);//内存超出限制
+                printf("内存超出限制！\n");
                 ptrace(PTRACE_KILL, pid, NULL, NULL);
                 break;
             }
@@ -234,8 +265,15 @@ public:
                 std::cout<<"正常结束,状态码号："<<WEXITSTATUS(status)<<" "<<strsignal(WEXITSTATUS(status))<<std::endl;
                 break;
             }
+
+            if(get_file_size((box.workdir+"/error.out").c_str())){
+                printf("运行出错\n");
+                break;
+            }
+            //printf("%d\n",WEXITSTATUS(status));
             if (WIFSIGNALED(status))
             {
+
                 /*  WIFSIGNALED: if the process is terminated by signal
                  *  由外部信号触发的进程终止
                  *  psignal(int sig, char *s)，like perror(char *s)，print out s, with error msg from system of sig
@@ -244,13 +282,13 @@ public:
                  * sig = 25 means File size limit exceeded
                  */
                 sig = WTERMSIG(status);
-
-                switch (exitcode)                  // 根据退出的原因给出判题结果
+                printf("有异常信号：%d！\n",sig);
+                switch (sig)                  // 根据退出的原因给出判题结果
                 {
                     case SIGCHLD:
                     case SIGALRM:
                         alarm(0);
-                        printf("alarm:%g\n", time_lmt);
+                        printf("alarm:%d\n", time_lmt);
                     case SIGKILL:
                     case SIGXCPU:
                         report.upStatus(22);//超时
@@ -269,7 +307,7 @@ public:
 
 
             long  call_id = ptrace(PTRACE_PEEKUSER, pid, ORIG_RAX * 8, NULL);
-            std::cout<<"系统回调id："<<call_id<<std::endl;
+            //std::cout<<"系统回调id："<<call_id<<std::endl;
             // 白名单机制
             ptrace(PTRACE_SYSCALL, pid, NULL, NULL);    // 继续等待下一次的系统调用或其他中断
 
@@ -289,14 +327,14 @@ public:
 
 
         // now the user is "judger"
-        if(box.into()==0){
+        if(box.into(1)==0){
             std::cout<<"正常进入沙盒\n";
         }
 
 
         struct rlimit LIM; // time limit, file limit& memory limit
-        LIM.rlim_cur = time_lmt;
-        LIM.rlim_max = time_lmt;
+        LIM.rlim_cur = time_lmt+1;
+        LIM.rlim_max = time_lmt+1;
         setrlimit(RLIMIT_CPU, &LIM);
         alarm(0);
         alarm(time_lmt);
@@ -335,13 +373,14 @@ public:
         }
         else{
             tracer(pid,time_lmt,mem_lmt,curmemory,usedtime);
+            std::cout<<"内存："<<curmemory<<"KB  时间："<<usedtime<<"ms"<<std::endl;
         }
-
+        return true;
 
     }
     //对比输出文件
     bool diff(){
-
+        return true;
     }
     ~Judger(){
 
@@ -359,19 +398,23 @@ public:
  */
 int main(int argc,char *argv[]){
 
-    assert(argc==5);
-   // int ip= atoi(argv[1]);
+    if(argc !=6) return 0;
+    //assert(argc==5);
+    int ip= atoi(argv[1]);
     int port=atoi(argv[2]);
     int tid= atoi(argv[3]);
     int langid=atoi(argv[4]);
+    std::string workdir=argv[5];
     language_set langs("langs.conf");
     if(langs.exist(langid)){
-        Judger tc(argv[1],port,langs.get(langid),"workdir");
-        if(tc.compile()){
-            if(tc.run()){
-                tc.diff();
-            }
-        }
+        Judger tc(argv[1],port,langs.get(langid),workdir);
+        tc.compile();
+        tc.run();
+//        if(tc.compile()){
+//            if(tc.run()){
+//                tc.diff();
+//            }
+//        }
     }
 
 }

@@ -28,6 +28,7 @@ public:
     language_set()=delete;
     language_set(std::string config){
         //读取语言配置文件
+        langs[1]=language();
 
     }
     bool exist(const int &tid){

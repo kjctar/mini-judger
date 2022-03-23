@@ -4,7 +4,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string>
-#include<queue>#include <thread>
+#include<queue>
+#include <thread>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -25,10 +26,10 @@
 
 class buffer{
 public:
-    string data;
+    std::string data;
 
     int index;
-    void add( string temp){
+    void add( std::string temp){
         data+=temp;
 
     }
