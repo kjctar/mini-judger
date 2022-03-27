@@ -39,6 +39,11 @@ public:
     }
 
 };
+class MQ{
+public:
+    MQ(){}
+
+};
 class JudgerServer{
 
 };
