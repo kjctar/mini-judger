@@ -26,6 +26,7 @@
 
 
 class buffer{
+
 public:
     std::string data;
 
