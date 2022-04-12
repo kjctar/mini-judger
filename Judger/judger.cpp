@@ -48,8 +48,6 @@
 #include <cstring>
 
 #include <assert.h>
-
-
 #define OJ_WT0 0     //提交排队
 #define OJ_WT1 1     //重判排队
 #define OJ_CI 2      //编译中（任务已派发）
