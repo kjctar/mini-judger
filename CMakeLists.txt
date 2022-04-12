@@ -3,4 +3,4 @@ project(untitled)
 
 set(CMAKE_CXX_STANDARD 11)
 SET(CMAKE_CXX_FLAGS -pthread)
-add_executable(untitled judger_server.cpp judger_core.cpp safe_queue.h msg_cache.h msg.h language.cpp language.h submit.cpp)
+add_executable(untitled JudgerCore/JudgerSever/judger_server.cpp JudgerCore/Judger/judger.cpp JudgerCore/Judger/safe_queue.h JudgerCore/Judger/msg_cache.h JudgerCore/Judger/msg.h JudgerCore/Judger/language.cpp JudgerCore/Judger/language.h JudgerCore/Judger/submit.cpp)
