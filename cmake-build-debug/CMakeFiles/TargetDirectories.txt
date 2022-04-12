@@ -1,3 +1,0 @@
-/home/kjctar/CLionProjects/judger/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/kjctar/CLionProjects/judger/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/kjctar/CLionProjects/judger/cmake-build-debug/CMakeFiles/judger.dir
